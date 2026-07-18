@@ -4,7 +4,10 @@ import { Button } from "@flowdesk/ui";
 
 async function googleSignIn() {
   "use server";
-  await signIn("google", { redirectTo: "/onboarding" });
+
+  return await signIn("google", {
+    redirectTo: "/onboarding",
+  });
 }
 
 export default async function SignInPage() {
