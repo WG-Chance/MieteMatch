@@ -416,11 +416,12 @@ model Subscription {
 // ============================================================
 // AUDIT LOG
 // ============================================================
-
 model AuditLog {
   id             String      @id @default(cuid())
   organizationId String
   userId         String?
+  ticketId       String?
+
   action         AuditAction
   entityId       String?
   entityType     String?
@@ -432,9 +433,11 @@ model AuditLog {
 
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  ticket         Ticket?      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@index([organizationId])
   @@index([userId])
+  @@index([ticketId])
   @@index([action])
   @@index([createdAt])
   @@index([entityId])
