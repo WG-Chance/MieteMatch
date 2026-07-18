@@ -1,0 +1,441 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// ENUMS
+// ============================================================
+
+enum Plan {
+  STARTER
+  GROWTH
+  SCALE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+  CANCELLED
+  TRIALING
+}
+
+enum MemberRole {
+  OWNER
+  ADMIN
+  AGENT
+  VIEWER
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_ON_CUSTOMER
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum TicketChannel {
+  EMAIL
+  WIDGET
+  API
+  MANUAL
+}
+
+enum SlaStatus {
+  OK
+  WARNING
+  BREACHED
+}
+
+enum AuditAction {
+  TICKET_CREATED
+  TICKET_UPDATED
+  TICKET_ASSIGNED
+  TICKET_STATUS_CHANGED
+  TICKET_PRIORITY_CHANGED
+  TICKET_RESOLVED
+  TICKET_CLOSED
+  REPLY_SENT
+  NOTE_ADDED
+  AI_TRIAGE_COMPLETED
+  MEMBER_INVITED
+  MEMBER_REMOVED
+  MEMBER_ROLE_CHANGED
+  SUBSCRIPTION_CHANGED
+  PAYMENT_SUCCEEDED
+  PAYMENT_FAILED
+  ORGANIZATION_UPDATED
+  WIDGET_CONFIGURED
+  SLA_BREACHED
+}
+
+// ============================================================
+// AUTH (NextAuth)
+// ============================================================
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// ============================================================
+// USERS & ORGANIZATIONS
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  accounts      Account[]
+  sessions      Session[]
+  memberships   OrganizationMember[]
+  assignedTickets Ticket[] @relation("AssignedTo")
+  replies       TicketReply[]
+  auditLogs     AuditLog[]
+  invitationsSent Invitation[] @relation("InvitedBy")
+}
+
+model Organization {
+  id          String   @id @default(cuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  website     String?
+  timezone    String   @default("Europe/Berlin")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members     OrganizationMember[]
+  tickets     Ticket[]
+  customers   Customer[]
+  subscription Subscription?
+  widgetConfig WidgetConfig?
+  slaPolicy   SlaPolicy?
+  tags        Tag[]
+  invitations Invitation[]
+  auditLogs   AuditLog[]
+
+  @@index([slug])
+}
+
+model OrganizationMember {
+  id             String   @id @default(cuid())
+  organizationId String
+  userId         String
+  role           MemberRole @default(AGENT)
+  isActive       Boolean  @default(true)
+  joinedAt       DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId])
+  @@index([userId])
+}
+
+model Invitation {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String
+  role           MemberRole @default(AGENT)
+  token          String   @unique @default(cuid())
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  invitedById    String?
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy      User?        @relation("InvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, email])
+  @@index([token])
+  @@index([email])
+}
+
+// ============================================================
+// CUSTOMERS (end-users submitting tickets)
+// ============================================================
+
+model Customer {
+  id             String   @id @default(cuid())
+  organizationId String
+  email          String
+  name           String?
+  avatarUrl      String?
+  metadata       Json     @default("{}")
+  ticketCount    Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets        Ticket[]
+
+  @@unique([organizationId, email])
+  @@index([organizationId])
+  @@index([email])
+}
+
+// ============================================================
+// TICKETS
+// ============================================================
+
+model Ticket {
+  id             String        @id @default(cuid())
+  number         Int
+  organizationId String
+  customerId     String?
+  assignedToId   String?
+  status         TicketStatus  @default(OPEN)
+  priority       TicketPriority @default(MEDIUM)
+  channel        TicketChannel @default(MANUAL)
+  subject        String
+  firstMessageAt DateTime      @default(now())
+  lastActivityAt DateTime      @default(now())
+  resolvedAt     DateTime?
+  closedAt       DateTime?
+  slaStatus      SlaStatus     @default(OK)
+  slaFirstResponseDue DateTime?
+  slaResolutionDue    DateTime?
+  slaBreachedAt       DateTime?
+  metadata       Json          @default("{}")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customer       Customer?       @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  assignedTo     User?           @relation("AssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+  replies        TicketReply[]
+  tags           TicketTag[]
+  aiTriage       AiTriage?
+  auditLogs      AuditLog[]
+
+  @@unique([organizationId, number])
+  @@index([organizationId])
+  @@index([status])
+  @@index([priority])
+  @@index([assignedToId])
+  @@index([customerId])
+  @@index([lastActivityAt])
+  @@index([slaStatus])
+  @@index([createdAt])
+}
+
+model TicketReply {
+  id         String   @id @default(cuid())
+  ticketId   String
+  authorId   String?
+  authorType String   @default("AGENT")
+  content    String   @db.Text
+  isInternal Boolean  @default(false)
+  emailId    String?
+  attachments Json    @default("[]")
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author     User?    @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([ticketId])
+  @@index([authorId])
+  @@index([createdAt])
+}
+
+// ============================================================
+// AI TRIAGE
+// ============================================================
+
+model AiTriage {
+  id             String        @id @default(cuid())
+  ticketId       String        @unique
+  category       String
+  priority       TicketPriority
+  sentiment      String
+  suggestedTags  String[]
+  summary        String        @db.Text
+  confidence     Float
+  reasoning      String        @db.Text
+  modelVersion   String
+  processingMs   Int
+  createdAt      DateTime      @default(now())
+
+  ticket         Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId])
+  @@index([category])
+}
+
+// ============================================================
+// TAGS
+// ============================================================
+
+model Tag {
+  id             String   @id @default(cuid())
+  organizationId String
+  name           String
+  color          String   @default("#6366f1")
+  createdAt      DateTime @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tickets        TicketTag[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+}
+
+model TicketTag {
+  ticketId String
+  tagId    String
+  addedAt  DateTime @default(now())
+
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  tag      Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([ticketId, tagId])
+  @@index([ticketId])
+  @@index([tagId])
+}
+
+// ============================================================
+// SLA POLICY
+// ============================================================
+
+model SlaPolicy {
+  id                   String   @id @default(cuid())
+  organizationId       String   @unique
+  criticalResponseHours Int      @default(1)
+  criticalResolutionHours Int    @default(4)
+  highResponseHours    Int      @default(4)
+  highResolutionHours  Int      @default(24)
+  mediumResponseHours  Int      @default(8)
+  mediumResolutionHours Int     @default(48)
+  lowResponseHours     Int      @default(24)
+  lowResolutionHours   Int      @default(72)
+  businessHoursOnly    Boolean  @default(false)
+  businessHoursStart   Int      @default(9)
+  businessHoursEnd     Int      @default(18)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// WIDGET CONFIG
+// ============================================================
+
+model WidgetConfig {
+  id             String   @id @default(cuid())
+  organizationId String   @unique
+  primaryColor   String   @default("#6366f1")
+  title          String   @default("Support")
+  welcomeMessage String   @default("How can we help you today?")
+  position       String   @default("bottom-right")
+  isEnabled      Boolean  @default(true)
+  allowedDomains String[] @default([])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// BILLING
+// ============================================================
+
+model Subscription {
+  id                   String             @id @default(cuid())
+  organizationId       String             @unique
+  stripeCustomerId     String             @unique
+  stripeSubscriptionId String?            @unique
+  stripePriceId        String?
+  plan                 Plan               @default(STARTER)
+  status               SubscriptionStatus @default(INACTIVE)
+  currentPeriodStart   DateTime?
+  currentPeriodEnd     DateTime?
+  cancelAtPeriodEnd    Boolean            @default(false)
+  ticketsThisMonth     Int                @default(0)
+  ticketResetAt        DateTime?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  organization         Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// AUDIT LOG
+// ============================================================
+
+model AuditLog {
+  id             String      @id @default(cuid())
+  organizationId String
+  userId         String?
+  action         AuditAction
+  entityId       String?
+  entityType     String?
+  before         Json?
+  after          Json?
+  ipAddress      String?
+  userAgent      String?
+  createdAt      DateTime    @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([entityId])
+}

@@ -1,0 +1,5 @@
+{
+  "name": "@flowdesk/config",
+  "version": "0.1.0",
+  "files": ["tsconfig.base.json", "tsconfig.nextjs.json"]
+}

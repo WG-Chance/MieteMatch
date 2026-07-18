@@ -1,0 +1,11 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "cd ../.. && turbo build --filter=@flowdesk/web",
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/sla-check",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

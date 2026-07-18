@@ -1,0 +1,12 @@
+{
+  "name": "@flowdesk/emails",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "dependencies": {
+    "resend": "^3.3.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5"
+  }
+}
