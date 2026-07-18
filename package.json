@@ -18,13 +18,14 @@
     "db:generate": "cd packages/db && npm run db:generate"
   },
   "devDependencies": {
-    "turbo": "^2.0.6",
-    "typescript": "^5.4.5",
+    "@types/node": "^20.14.2",
     "prettier": "^3.3.2",
-    "@types/node": "^20.14.2"
+    "turbo": "^2.0.6",
+    "typescript": "^5.4.5"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
-  }
+  },
+  
 }

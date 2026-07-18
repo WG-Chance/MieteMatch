@@ -1,0 +1,14 @@
+{
+  "node": {
+    "e0d3f8a3f543949db14e95806b2f651b1a918217": {
+      "workers": {
+        "app/auth/signin/page": "(rsc)/./node_modules/next/dist/build/webpack/loaders/next-flight-action-entry-loader.js?actions=%5B%5B%22%2Fworkspaces%2FMieteMatch%2Fapps%2Fweb%2Fsrc%2Fapp%2Fauth%2Fsignin%2Fpage.tsx%22%2C%5B%22%24%24ACTION_0%22%5D%5D%5D&__client_imported__=!"
+      },
+      "layer": {
+        "app/auth/signin/page": "rsc"
+      }
+    }
+  },
+  "edge": {},
+  "encryptionKey": "8KBFy7VTPXQE+L/rCdYH5lnYH4lThzLSmKv/hSqE0ng="
+}
